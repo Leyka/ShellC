@@ -1,17 +1,64 @@
 /* Inspired on: https://brennan.io/2015/01/16/write-a-shell-in-c/ */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <sys/wait.h>
+#include "commands.h"
 
 #define READ_BUFSIZE 1024
-
 #define TOKEN_BUFSIZE 64
 #define TOKEN_DELIMITERS "\t "
 
+int launchProcess(char **args)
+{
+    pid_t pid, wpid;
+    int status;
+
+    pid = fork();
+
+    // Error forking
+    if (pid < 0) {
+        perror("Error forking process");
+    }
+    // Child process
+    if (pid == 0) {
+        // Execute user's commands
+        if (execvp(args[0], args) == -1) {
+            perror("Failed to launch process");
+        }
+        exit(EXIT_FAILURE); // exit so that the shell can keep running
+    }
+    // Parent, fork() executed successfully
+    else {
+        // Parent process
+        // child is going to execute the process, so the parent needs to wait for the command to finish running.
+        do {
+            // wait until either the processes are exited or killed
+            wpid = waitpid(pid, &status, WUNTRACED);
+        } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+    }
+
+    return 1;
+}
+
+
 int execute(char** args)
 {
-    return 0;
+    int i;
+
+    // Empty command
+    if (args[0] == NULL) {
+        return 1;
+    }
+
+    for (i= 0; i < NB_COMMANDS; i++) {
+        if (strcmp(args[0], commands[i]) == 0) { // commands exist
+            return (*builtinFunctions)(args);
+        }
+    }
+
+    return launchProcess(args);
 }
 
 char** splitLine(char* line)
@@ -28,7 +75,6 @@ char** splitLine(char* line)
     // Split line into tokens
     token = strtok(line, TOKEN_DELIMITERS);
     while (token != NULL) {
-        printf("%s \n", token);
         tokens[pos] = token;
         pos++;
 
@@ -115,6 +161,7 @@ void loop()
 
 int main(int argc, char **argv)
 {
+    printf("~~ ShellShell ~~ \n");
     loop();
     return EXIT_SUCCESS;
 }
